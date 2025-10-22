@@ -474,7 +474,7 @@ def launch(hydra_config: DictConfig):
         world_size=WORLD_SIZE,
         seed=config.seed,
         test_set_mode=False,
-        epochs_per_iter=first_stage.eval_interval if first_stage.eval_interval is not None else first_stage.epochs,
+        epochs_per_iter=first_stage.epochs,
         global_batch_size=config.global_batch_size
     )
 
@@ -494,7 +494,7 @@ def launch(hydra_config: DictConfig):
         if RANK == 0:
             print(f"\n{'='*80}")
             print(f"Starting Stage {stage_idx + 1}/{len(config.training_stages)}: {stage_name}")
-            print(f"Epochs: {stage_config.epochs}, Eval Interval: {stage_config.eval_interval}")
+            print(f"Epochs: {stage_config.epochs}")
             print(f"{'='*80}\n")
 
         # Load data for this stage (unless it's the first stage, already loaded)
@@ -506,68 +506,34 @@ def launch(hydra_config: DictConfig):
                 world_size=WORLD_SIZE,
                 seed=config.seed,
                 test_set_mode=False,
-                epochs_per_iter=stage_config.eval_interval if stage_config.eval_interval is not None else stage_config.epochs,
+                epochs_per_iter=stage_config.epochs,
                 global_batch_size=config.global_batch_size
             )
-
-        eval_loader, eval_metadata = create_dataloader(
-            data_path=stage_config.data_path,
-            split="test",
-            rank=RANK,
-            world_size=WORLD_SIZE,
-            seed=config.seed,
-            test_set_mode=True,
-            epochs_per_iter=1,
-            global_batch_size=config.global_batch_size
-        )
 
         # Reset carry for new dataset
         train_state.carry = None
 
-        # Training iterations for this stage
-        train_epochs_per_iter = stage_config.eval_interval if stage_config.eval_interval is not None else stage_config.epochs
-        total_iters = stage_config.epochs // train_epochs_per_iter
-        assert stage_config.epochs % train_epochs_per_iter == 0, f"Eval interval must be a divisor of epochs for stage {stage_idx}"
+        # Training iterations for this stage - just run all epochs without evaluation
+        if RANK == 0:
+            print(f"[Stage {stage_idx + 1}, Rank {RANK}]: Training for {stage_config.epochs} epochs")
 
         stage_step = 0
-        for iter_id in range(total_iters):
-            if RANK == 0:
-                print(f"[Stage {stage_idx + 1}, Rank {RANK}]: Epoch {iter_id * train_epochs_per_iter}/{stage_config.epochs}")
-
-            # Train
-            train_state.model.train()
-            for set_name, batch, global_batch_size in train_loader:
-                metrics = train_batch(
-                    config, train_state, batch, global_batch_size,
-                    rank=RANK, world_size=WORLD_SIZE,
-                    stage_step=stage_step,
-                    stage_total_steps=stage_total_steps[stage_idx],
-                    stage_config=stage_config
-                )
-                stage_step += 1
-
-                if RANK == 0 and metrics is not None:
-                    # Add stage info to metrics
-                    metrics[f"stage"] = stage_idx
-                    wandb.log(metrics, step=train_state.step)
-                    progress_bar.update(1)  # type: ignore
-
-            # Evaluate
-            train_state.model.eval()
-            metrics = evaluate(config, train_state, eval_loader, eval_metadata, rank=RANK, world_size=WORLD_SIZE, checkpoint_path=config.checkpoint_path)
+        train_state.model.train()
+        for set_name, batch, global_batch_size in train_loader:
+            metrics = train_batch(
+                config, train_state, batch, global_batch_size,
+                rank=RANK, world_size=WORLD_SIZE,
+                stage_step=stage_step,
+                stage_total_steps=stage_total_steps[stage_idx],
+                stage_config=stage_config
+            )
+            stage_step += 1
 
             if RANK == 0 and metrics is not None:
-                # Prefix metrics with stage name
-                prefixed_metrics = {}
-                for set_name, set_metrics in metrics.items():
-                    for metric_name, value in set_metrics.items():
-                        prefixed_metrics[f"eval/{set_name}/{metric_name}"] = value
-                prefixed_metrics["stage"] = stage_idx
-                wandb.log(prefixed_metrics, step=train_state.step)
-
-            # Checkpoint
-            if RANK == 0 and (config.checkpoint_every_eval or (iter_id == total_iters - 1)):
-                save_train_state(config.checkpoint_path, train_state, stage_name=f"stage{stage_idx}_{stage_name}")
+                # Add stage info to metrics
+                metrics[f"stage"] = stage_idx
+                wandb.log(metrics, step=train_state.step)
+                progress_bar.update(1)  # type: ignore
 
         # Save checkpoint after completing stage
         if RANK == 0 and config.checkpoint_every_stage:
