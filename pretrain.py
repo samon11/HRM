@@ -134,26 +134,33 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
                     dist.broadcast(param, src=0)
 
     # Optimizers and lr
-    optimizers = [
-        CastedSparseEmbeddingSignSGD_Distributed(
-            model.model.puzzle_emb.buffers(),  # type: ignore
-            
-            lr=0,  # Needs to be set by scheduler
-            weight_decay=config.puzzle_emb_weight_decay,
+    optimizers = []
+    optimizer_lrs = []
 
-            world_size=world_size
-        ),
+    # Only add puzzle embedding optimizer if puzzle embeddings are enabled
+    if model.model.puzzle_emb is not None:
+        optimizers.append(
+            CastedSparseEmbeddingSignSGD_Distributed(
+                model.model.puzzle_emb.buffers(),  # type: ignore
+
+                lr=0,  # Needs to be set by scheduler
+                weight_decay=config.puzzle_emb_weight_decay,
+
+                world_size=world_size
+            )
+        )
+        optimizer_lrs.append(config.puzzle_emb_lr)
+
+    # Main model optimizer
+    optimizers.append(
         AdamATan2(
             model.parameters(),
             lr=config.lr,
             weight_decay=config.weight_decay,
             betas=(config.beta1, config.beta2)
         )
-    ]
-    optimizer_lrs = [
-        config.puzzle_emb_lr,
-        config.lr
-    ]
+    )
+    optimizer_lrs.append(config.lr)
 
     return model, optimizers, optimizer_lrs
 

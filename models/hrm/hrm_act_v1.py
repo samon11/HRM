@@ -223,7 +223,9 @@ class HierarchicalReasoningModel_ACTV1(nn.Module):
 
     @property
     def puzzle_emb(self):
-        return self.inner.puzzle_emb
+        if self.config.puzzle_emb_ndim > 0:
+            return self.inner.puzzle_emb
+        return None
 
     def initial_carry(self, batch: Dict[str, torch.Tensor]):
         batch_size = batch["inputs"].shape[0]
