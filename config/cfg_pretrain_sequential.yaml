@@ -50,3 +50,6 @@ checkpoint_every_stage: True  # Save checkpoint after completing each stage
 # Extras
 seed: 0
 eval_save_outputs: []
+
+# Resume training from checkpoint (optional)
+resume_checkpoint: null

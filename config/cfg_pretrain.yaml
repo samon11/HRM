@@ -1,20 +1,20 @@
 # ARC training config
 
 defaults:
-  - arch: hrm_v1
+  - arch: hrm_v1_no_puzzle_emb
   - _self_
 
 hydra:
   output_subdir: null
 
 # Data path
-data_path: data/arc-aug-1000
+data_path: data/arc-2-aug-1000
 
 # Hyperparams - Training
-global_batch_size: 768
+global_batch_size: 250
 
-epochs: 100000
-eval_interval: 10000
+epochs: 1000
+eval_interval: 1000
 checkpoint_every_eval: True
 
 lr: 1e-4
@@ -29,3 +29,4 @@ puzzle_emb_weight_decay: 0.1
 
 # Hyperparams - Puzzle embeddings training
 puzzle_emb_lr: 1e-2
+resume_checkpoint: null

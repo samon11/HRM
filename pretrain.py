@@ -178,7 +178,8 @@ def cosine_schedule_with_warmup_lr_lambda(
 
 def init_train_state(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, world_size: int):
     # Estimated total training steps
-    total_steps = int(config.epochs * train_metadata.total_groups * train_metadata.mean_puzzle_examples / config.global_batch_size)
+    steps_per_epoch = int(train_metadata.total_groups * train_metadata.mean_puzzle_examples / config.global_batch_size)
+    total_steps = config.epochs * steps_per_epoch
 
     # Model
     model, optimizers, optimizer_lrs = create_model(config, train_metadata, world_size=world_size)
@@ -202,6 +203,10 @@ def init_train_state(config: PretrainConfig, train_metadata: PuzzleDatasetMetada
             step_str = ckpt_filename.removeprefix("step_").split("_")[0]
             initial_step = int(step_str)
             print(f"Resuming from step {initial_step}")
+            # When resuming, add the configured epochs to the current step
+            # This allows training for additional epochs beyond the checkpoint
+            total_steps = initial_step + (config.epochs * steps_per_epoch)
+            print(f"Training from step {initial_step} to {total_steps} (additional {config.epochs} epochs)")
 
     return TrainState(
         step=initial_step,
