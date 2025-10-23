@@ -62,6 +62,7 @@ class PretrainConfig(pydantic.BaseModel):
     project_name: Optional[str] = None
     run_name: Optional[str] = None
     checkpoint_path: Optional[str] = None
+    resume_checkpoint: Optional[str] = None  # Path to checkpoint file to resume from
 
     # Extras
     seed: int = 0
@@ -182,8 +183,28 @@ def init_train_state(config: PretrainConfig, train_metadata: PuzzleDatasetMetada
     # Model
     model, optimizers, optimizer_lrs = create_model(config, train_metadata, world_size=world_size)
 
+    # Initialize step counter
+    initial_step = 0
+
+    # Load checkpoint if resume_checkpoint is provided
+    if config.resume_checkpoint is not None:
+        print(f"Loading checkpoint from {config.resume_checkpoint}")
+        try:
+            model.load_state_dict(torch.load(config.resume_checkpoint, map_location="cuda"), assign=True)
+        except:
+            # Try unwrapping torch.compile prefix
+            state_dict = {k.removeprefix("_orig_mod."): v for k, v in torch.load(config.resume_checkpoint, map_location="cuda").items()}
+            model.load_state_dict(state_dict, assign=True)
+
+        # Extract step number from checkpoint filename
+        ckpt_filename = os.path.basename(config.resume_checkpoint)
+        if ckpt_filename.startswith("step_"):
+            step_str = ckpt_filename.removeprefix("step_").split("_")[0]
+            initial_step = int(step_str)
+            print(f"Resuming from step {initial_step}")
+
     return TrainState(
-        step=0,
+        step=initial_step,
         total_steps=total_steps,
 
         model=model,
@@ -432,10 +453,10 @@ def launch(hydra_config: DictConfig):
     # Progress bar and logger
     progress_bar = None
     if RANK == 0:
-        progress_bar = tqdm.tqdm(total=train_state.total_steps)
+        progress_bar = tqdm.tqdm(total=train_state.total_steps, initial=train_state.step)
 
         wandb.init(project=config.project_name, name=config.run_name, config=config.model_dump(), settings=wandb.Settings(_disable_stats=True))  # type: ignore
-        wandb.log({"num_params": sum(x.numel() for x in train_state.model.parameters())}, step=0)
+        wandb.log({"num_params": sum(x.numel() for x in train_state.model.parameters())}, step=train_state.step if train_state.step > 0 else 0)
         save_code_and_config(config)
 
     # Training Loop
