@@ -11,8 +11,8 @@ hydra:
 training_stages:
   # Stage 1: ARC-1
   - data_path: data/arc-aug-1000
-    epochs: 100000
-    eval_interval: 10000
+    epochs: 1000
+    eval_interval: 1000
     # Optional: override lr for this stage
     # lr: 1e-4
     # lr_min_ratio: 1.0
@@ -20,15 +20,15 @@ training_stages:
 
   # Stage 2: ARC-2 (continues from ARC-1 checkpoint)
   - data_path: data/arc-2-aug-1000
-    epochs: 100000
-    eval_interval: 10000
+    epochs: 1000
+    eval_interval: 1000
     # Optional: use different lr for fine-tuning on ARC-2
     # lr: 5e-5
     # lr_min_ratio: 0.1
     # lr_warmup_steps: 1000
 
 # Hyperparams - Training (defaults for all stages)
-global_batch_size: 240
+global_batch_size: 250
 
 lr: 1e-4
 lr_min_ratio: 1.0

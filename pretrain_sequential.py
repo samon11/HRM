@@ -312,11 +312,10 @@ def evaluate(config: SequentialPretrainConfig, train_state: TrainState, eval_loa
         metric_values = None
         metric_global_batch_size = [0 for _ in range(len(set_ids))]
 
-        # Calculate total evaluation batches for progress bar
-        total_eval_batches = sum(eval_metadata.total_groups_per_set.values())
+        # Progress bar without total (since total_groups_per_set is not in metadata)
         eval_progress_bar = None
         if rank == 0:
-            eval_progress_bar = tqdm.tqdm(total=total_eval_batches, desc="Evaluating", leave=False)
+            eval_progress_bar = tqdm.tqdm(desc="Evaluating", leave=False, total=eval_metadata.num_puzzle_identifiers // (config.global_batch_size))
 
         carry = None
         for set_name, batch, global_batch_size in eval_loader:

@@ -52,7 +52,9 @@ def launch():
     train_state.step = 0
     ckpt_filename = os.path.basename(eval_cfg.checkpoint)
     if ckpt_filename.startswith("step_"):
-        train_state.step = int(ckpt_filename.removeprefix("step_"))
+        # Extract step number from filenames like "step_34378" or "step_34378_stage1_arc-2-aug-1000_complete"
+        step_str = ckpt_filename.removeprefix("step_").split("_")[0]
+        train_state.step = int(step_str)
 
     # Evaluate
     print ("Starting evaluation")
